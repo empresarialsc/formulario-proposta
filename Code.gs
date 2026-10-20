@@ -35,7 +35,8 @@ const ABA_EMPRESAS = 'Empresas';
 const CAB_RESPOSTAS = ['Protocolo', 'Data/Hora', 'Responsável', 'E-mail', 'Telefone', 'Qtd. CNPJs',
   'CNPJs', 'Razões sociais', 'Observações', 'Link do PDF', 'Status do e-mail', 'Status da precificação'];
 const CAB_EMPRESAS = ['Protocolo', 'Data/Hora', 'Nº', 'CNPJ', 'Tipo', 'Razão social', 'Atividade', 'Município/UF',
-  'Regime tributário', 'Faturamento médio mensal (R$)', 'Notas fiscais/mês', 'Sócios',
+  'Regime tributário', 'Faturamento médio mensal (R$)', 'NF de entrada/mês', 'NF de saída/mês',
+  'Total de NF/mês', 'Sócios',
   'Funcionários ativos', 'Recibos de autônomo/mês', 'Particularidades'];
 
 const MAX_EMPRESAS = 30;
@@ -93,7 +94,7 @@ function doPost(e) {
     d.empresas.forEach((x, i) => {
       abaE.appendRow([
         d.id, dataHora, i + 1, x.cnpj, x.tipo, x.razaoSocial, x.atividade, x.municipioUf,
-        x.regime, x.faturamentoMensal, x.notasMes, x.socios, x.funcionarios, x.autonomos,
+        x.regime, x.faturamentoMensal, x.notasEntrada, x.notasSaida, x.notasMes, x.socios, x.funcionarios, x.autonomos,
         x.complexidades.join('; ')
       ].map(seguro_));
     });
@@ -145,6 +146,11 @@ function validar_(b) {
     vistos[cnpjNum] = true;
     const razao = txt(x.razaoSocial, 200);
     if (razao.length < 2) throw new Error('Razão social obrigatória no bloco ' + (i + 1) + '.');
+    // Notas fiscais: entrada + saída. (Se vier de uma página antiga, só com o total, usa o total.)
+    const semDetalhe = x.notasEntrada === undefined && x.notasSaida === undefined;
+    const nEnt = semDetalhe ? '' : int(x.notasEntrada, 0, 1e7);
+    const nSai = semDetalhe ? '' : int(x.notasSaida, 0, 1e7);
+    const nTot = semDetalhe ? int(x.notasMes, 0, 1e7) : nEnt + nSai;   // total sempre recalculado no servidor
     return {
       cnpj: cnpjNum.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5'),
       tipo: txt(x.tipo, 40),
@@ -153,7 +159,9 @@ function validar_(b) {
       municipioUf: txt(x.municipioUf, 120),
       regime: txt(x.regime, 60),
       faturamentoMensal: int(x.faturamentoMensal, 0, 1e12),
-      notasMes: int(x.notasMes, 0, 1e7),
+      notasEntrada: nEnt,
+      notasSaida: nSai,
+      notasMes: nTot,
       socios: int(x.socios, 1, 10000),
       funcionarios: int(x.funcionarios, 0, 1e6),
       autonomos: int(x.autonomos, 0, 1e6),
@@ -255,7 +263,9 @@ function htmlPdf_(d, dataHora) {
       linha('CNPJ', x.cnpj) + linha('Razão social', x.razaoSocial) + linha('Atividade principal', x.atividade) +
       linha('Município/UF', x.municipioUf) + linha('Regime tributário', x.regime) +
       linha('Faturamento médio mensal', brl_(x.faturamentoMensal)) +
-      linha('Notas fiscais por mês', x.notasMes) + linha('Nº de sócios', x.socios) +
+      linha('Notas fiscais de entrada por mês (média)', x.notasEntrada) +
+      linha('Notas fiscais de saída por mês (média)', x.notasSaida) +
+      linha('Total de notas fiscais por mês', x.notasMes) + linha('Nº de sócios', x.socios) +
       linha('Funcionários ativos', x.funcionarios) + linha('Recibos de autônomo por mês', x.autonomos) +
       linha('Particularidades', x.complexidades.length ? x.complexidades.join('; ') : 'Nenhuma informada') + '</table>';
   });
